@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class PostService {
@@ -51,8 +53,13 @@ public class PostService {
         return repository.findIdsByWord(word);
     }
 
-    /** 지정한 글들의 title/content에서 before를 after로 변경. 없는 id는 건너뛰고, 변경된 글 수를 반환 */
+    /**
+     * 지정한 글들의 title/content에서 before를 after로 변경 (검색과 같이 대소문자 무시).
+     * 없는 id는 건너뛰고, 실제로 내용이 바뀐 글만 저장/집계해 그 수를 반환
+     */
     public int replaceWord(List<Long> ids, String before, String after) {
+        Pattern pattern = Pattern.compile(Pattern.quote(before), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        String literal = Matcher.quoteReplacement(after);
         int changed = 0;
         for (Long id : ids) {
             Optional<Post> found = repository.findById(id);
@@ -60,10 +67,15 @@ public class PostService {
                 continue;
             }
             Post post = found.get();
+            String title = pattern.matcher(post.getTitle()).replaceAll(literal);
+            String content = pattern.matcher(post.getContent()).replaceAll(literal);
+            if (title.equals(post.getTitle()) && content.equals(post.getContent())) {
+                continue;
+            }
             Post form = new Post();
-            form.setTitle(post.getTitle().replace(before, after));
+            form.setTitle(title);
             form.setName(post.getName());
-            form.setContent(post.getContent().replace(before, after));
+            form.setContent(content);
             update(id, form);
             changed++;
         }
